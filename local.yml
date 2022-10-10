@@ -1,0 +1,71 @@
+# script to run on local machine
+- hosts: localhost
+  # using Ansible pull, can use local connection instead of ssh
+  connection: local
+  # Run as sudo, root
+  become: true
+
+  # Install packages using package module
+  tasks: 
+  - name: install packages htop, tmux, and vim-nox
+    # Use package to install it
+    package: 
+      name: 
+      - htop
+      - tmux
+      # Required for dconf changes later
+      - python3-psutil
+      - vim-nox
+  # Modify and set GNOME wall paper for the specific user
+  # - name: copy wallpaper file
+  #   copy:
+  #     src: files/warty-final-ubuntu-test.png
+  #     dest: /usr/share/backgrounds/warty-final-ubuntu-test.png
+  #     owner: root
+  #     group: root
+  - name: set wallpaper
+    become_user: justin
+    # Use module dconf to edit GNOME wallpaper setting, set key-value settings
+    dconf: 
+      key: "/org/gnome/desktop/background/picture-uri-dark"
+      value: "'/usr/share/backgrounds/Optical_Fibers_in_Dark_by_Elena_Stravoravdi.jpg'"
+  - name: set wallpaper position
+    become_user: justin
+    dconf:
+      key: "/org/gnome/desktop/background/picture-options"
+      value: "'zoom'"
+
+  # Copy bash dotfile configuration
+  - name: copy .bashrc file
+    copy:
+      src: files/.bashrc
+      # Must be full path to use due to run as root
+      dest: /home/justin/.bashrc
+      owner: justin
+      group: justin
+
+  # Add ansible user to perform automation
+  - name: add ansible user
+    user:
+      name: raptor
+      system: yes
+  
+  # /etc/sudoers.d is altered to allow ansible user to run sudo commands
+  - name: set up sudo for ansible user
+    copy:
+      src: files/sudoer_raptor
+      dest: /etc/sudoers.d/raptor
+      owner: root
+      group: root
+      mode: 0440
+  
+  # Schedule regular task to run the configuration work regularly
+  # It will run automatically to update the system to your repository changes
+  - name: add ansible-pull cron job
+    cron:
+      name: ansible auto-provision
+      user: raptor
+      # Run every 10 minutes
+      minute: "*/10"
+      # Run ansible-pull -o means only when there are changes to the repository
+      job: ansible-pull -o -U https://github.com/justunsix/ansible-test.git
